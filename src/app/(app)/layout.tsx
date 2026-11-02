@@ -1,0 +1,34 @@
+import { Suspense, type ReactNode } from "react";
+import { auth } from "@clerk/nextjs/server";
+import { AppNav } from "@/components/app-shell/app-nav";
+import { Skeleton } from "@/components/ui/skeleton";
+
+export default function AppLayout({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-1 flex-col">
+      <AppNav />
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8">
+        {/* auth() reads the request, so Cache Components requires a Suspense boundary. */}
+        <Suspense fallback={<PageSkeleton />}>
+          <SignedInOnly>{children}</SignedInOnly>
+        </Suspense>
+      </main>
+    </div>
+  );
+}
+
+// Redirects signed-out visitors to sign in. This is a UX guard only: every
+// Convex function authorizes the caller itself.
+async function SignedInOnly({ children }: { children: ReactNode }) {
+  await auth.protect();
+  return children;
+}
+
+function PageSkeleton() {
+  return (
+    <div className="flex flex-col gap-4" aria-busy="true">
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-40 w-full rounded-xl" />
+    </div>
+  );
+}
