@@ -12,8 +12,9 @@ import { CATEGORY_LABELS } from "@/lib/labels";
 
 /**
  * The public "board": a pegboard where tools hang as tags, grouped by
- * category. Read-only on purpose (name and category only), so nothing on it
- * looks clickable.
+ * category. Read-only on purpose (name and category only). Tags are flat
+ * paper with a pointed, punched end, a shape no button in the app uses, so
+ * they don't promise a click.
  */
 export function PublicToolBoard() {
   return (
@@ -79,7 +80,16 @@ function BoardContents() {
         <div className="rounded-lg bg-card p-5 shadow-sm">
           <p className="font-medium">The board is empty for now.</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Be the first neighbor to hang something up. Sign in and list a tool.
+            Be the first neighbor to hang something up.{" "}
+            <Unauthenticated>Sign in and list a tool.</Unauthenticated>
+            <Authenticated>
+              <Link
+                href="/listings"
+                className="font-medium text-foreground underline decoration-primary/60 underline-offset-4 hover:decoration-primary"
+              >
+                List a tool
+              </Link>
+            </Authenticated>
           </p>
         </div>
       </Pegboard>
@@ -105,10 +115,10 @@ function BoardContents() {
                 {tools.map((tool) => (
                   <li
                     key={tool._id}
-                    className="flex min-h-11 items-center gap-3 rounded-md bg-card px-3 py-2 text-sm text-card-foreground shadow-[0_1px_2px_oklch(0.4_0.04_55/0.18)]"
+                    className="flex min-h-9 items-center gap-2.5 rounded-r-sm bg-secondary py-1.5 pr-3 pl-4 text-sm text-secondary-foreground [clip-path:polygon(0.75rem_0,100%_0,100%_100%,0.75rem_100%,0_50%)]"
                   >
-                    {/* The punched hole of a hang tag. */}
-                    <span aria-hidden className="size-2.5 shrink-0 rounded-full bg-board ring-1 ring-board-hole" />
+                    {/* The punched hole near the tag's pointed end. */}
+                    <span aria-hidden className="size-2 shrink-0 rounded-full bg-board ring-1 ring-board-hole" />
                     <span className="line-clamp-2 min-w-0 break-words">{tool.name}</span>
                   </li>
                 ))}

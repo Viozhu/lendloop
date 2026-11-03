@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ArrowUpRightIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpRightIcon } from "lucide-react";
 import { LandingCta } from "@/components/landing-cta";
 import { PublicToolBoard } from "@/components/public-tool-board";
 import { Wordmark } from "@/components/wordmark";
@@ -44,8 +44,16 @@ const MECHANISMS = [
 export default function LandingPage() {
   return (
     <div className="flex flex-1 flex-col">
-      <header className="mx-auto flex w-full max-w-6xl items-center px-4 py-5 sm:px-6">
+      <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-5 sm:px-6">
         <Wordmark />
+        {/* Reviewers are the primary audience: one quiet jump to the engineering notes. */}
+        <a
+          href="#under-the-hood"
+          className="inline-flex items-center gap-1 rounded-sm text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        >
+          For reviewers
+          <ArrowDownIcon aria-hidden className="size-3.5 text-primary" />
+        </a>
       </header>
 
       <main className="flex flex-1 flex-col">
@@ -88,7 +96,7 @@ export default function LandingPage() {
                   </span>
                   <div className="flex flex-col gap-1 pt-1">
                     <h3 className="font-medium">{step.title}</h3>
-                    <p className="text-sm text-muted-foreground">{step.body}</p>
+                    <p className="text-sm text-pretty text-muted-foreground">{step.body}</p>
                   </div>
                 </li>
               ))}
@@ -96,13 +104,13 @@ export default function LandingPage() {
           </section>
         </div>
 
-        <section aria-labelledby="hood-heading" className="border-t bg-secondary">
+        <section id="under-the-hood" aria-labelledby="hood-heading" className="scroll-mt-4 border-t bg-secondary">
           <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-16">
             <div className="flex flex-col items-start gap-4">
               <h2 id="hood-heading" className="font-display text-3xl font-semibold tracking-tight">
                 Under the hood
               </h2>
-              <p className="text-muted-foreground">
+              <p className="text-pretty text-muted-foreground">
                 LendLoop is a take-home project. If you&apos;re reviewing it, these are the parts
                 worth checking.
               </p>
@@ -121,7 +129,7 @@ export default function LandingPage() {
               {MECHANISMS.map((item) => (
                 <div key={item.title} className="flex flex-col gap-1.5 border-t border-border py-5">
                   <dt className="font-medium">{item.title}</dt>
-                  <dd className="text-sm text-muted-foreground">{item.body}</dd>
+                  <dd className="text-sm text-pretty text-muted-foreground">{item.body}</dd>
                 </div>
               ))}
             </dl>
