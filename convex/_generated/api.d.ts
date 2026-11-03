@@ -8,12 +8,14 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_availability from "../lib/availability.js";
 import type * as lib_dates from "../lib/dates.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as lib_loanRules from "../lib/loanRules.js";
 import type * as lib_loanStateMachine from "../lib/loanStateMachine.js";
+import type * as lib_loanTransitions from "../lib/loanTransitions.js";
 import type * as lib_outbox from "../lib/outbox.js";
 import type * as lib_toolInput from "../lib/toolInput.js";
 import type * as lib_validators from "../lib/validators.js";
@@ -28,12 +30,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
   "lib/auth": typeof lib_auth;
   "lib/availability": typeof lib_availability;
   "lib/dates": typeof lib_dates;
   "lib/errors": typeof lib_errors;
   "lib/loanRules": typeof lib_loanRules;
   "lib/loanStateMachine": typeof lib_loanStateMachine;
+  "lib/loanTransitions": typeof lib_loanTransitions;
   "lib/outbox": typeof lib_outbox;
   "lib/toolInput": typeof lib_toolInput;
   "lib/validators": typeof lib_validators;

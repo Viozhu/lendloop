@@ -96,3 +96,21 @@ each new status maps to exactly one notification type and recipient.
   make concurrent approvals safe.
 - Date rules live in `convex/lib/loanRules.ts`, shared by the request dialog
   and the mutation, so the UI and the server always agree.
+
+## D15. Roles live in Convex, not Clerk metadata
+
+`users.role` and `users.trustedLender` are stored in Convex and only changed by
+server code. Clerk public metadata would also be server-writable, but then the
+role would sit in the JWT and could go stale until the token refreshes, and
+Convex functions would trust a claim instead of their own database. Keeping the
+role next to the data means authorization runs against one source of truth,
+inside the same transaction as the write.
+
+The first admin is created from a trusted shell with the internal
+`admin:setRole` mutation. There is no UI or public API path to change a role.
+
+## D16. Admin removal declines pending requests
+
+When an admin removes a listing, pending requests are declined through the
+normal state machine, so borrowers are notified. Approved loans stay open: the
+tool is physically out and still has to be returned.

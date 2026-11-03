@@ -1,11 +1,12 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { mutation, query, type QueryCtx } from "./_generated/server";
 import { firstName, requireLoanParty, requireUser } from "./lib/auth";
 import { rangesOverlap, todayUtc } from "./lib/dates";
 import { appError } from "./lib/errors";
 import { loanDatesError } from "./lib/loanRules";
-import { assertTransition, NOTIFICATION_FOR } from "./lib/loanStateMachine";
+import { assertTransition } from "./lib/loanStateMachine";
+import { applyTransition } from "./lib/loanTransitions";
 import { enqueueNotification } from "./lib/outbox";
 import type { LoanStatus } from "./lib/validators";
 
@@ -142,23 +143,6 @@ export const listIncoming = query({
     );
   },
 });
-
-/** Applies a validated status change and enqueues its notification in the same transaction. */
-async function applyTransition(ctx: MutationCtx, loan: Doc<"loans">, to: Exclude<LoanStatus, "pending">) {
-  assertTransition(loan.status, to);
-  const now = Date.now();
-  await ctx.db.patch(loan._id, {
-    status: to,
-    ...(to === "returned" ? { returnedAt: now } : { decidedAt: now }),
-  });
-
-  const { type, recipient } = NOTIFICATION_FOR[to];
-  await enqueueNotification(ctx, {
-    loanId: loan._id,
-    type,
-    recipientUserId: recipient === "lender" ? loan.lenderId : loan.borrowerId,
-  });
-}
 
 async function loansWithStatus(ctx: QueryCtx, toolId: Id<"tools">, status: LoanStatus) {
   return await ctx.db

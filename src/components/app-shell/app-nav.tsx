@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
+import { useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -14,6 +16,9 @@ const NAV_ITEMS = [
 
 export function AppNav() {
   const pathname = usePathname();
+  const me = useQuery(api.users.me);
+  // Hiding the link is cosmetic; admin functions check the role server-side.
+  const items = me?.role === "admin" ? [...NAV_ITEMS, { href: "/admin", label: "Admin" }] : NAV_ITEMS;
 
   return (
     <header className="border-b">
@@ -22,7 +27,7 @@ export function AppNav() {
           LendLoop
         </Link>
         <nav aria-label="Main" className="flex flex-1 items-center gap-1 overflow-x-auto">
-          {NAV_ITEMS.map((item) => {
+          {items.map((item) => {
             const active = pathname.startsWith(item.href);
             return (
               <Link

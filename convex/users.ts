@@ -13,7 +13,7 @@ export const store = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw appError("UNAUTHENTICATED");
 
-    const email = identity.email ?? "";
+    const email = (identity.email ?? "").toLowerCase();
     const name =
       identity.name ?? identity.givenName ?? identity.nickname ?? (email.split("@")[0] || "Neighbor");
 
