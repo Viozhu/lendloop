@@ -7,7 +7,49 @@ them for a date range, owners approve or decline, and loans get marked as
 returned. n8n sends the notifications and a daily overdue reminder. If
 automation fails, it shows up in an admin panel.
 
-> _Screenshots / GIF: landing · tools catalog · request dialog · incoming requests · admin automation health._
+![LendLoop walkthrough: approving a request, Trusted Lender, admin removal and automation health](docs/media/walkthrough.gif)
+
+<sub>Recorded against the local stack: approve a request (the borrower is notified through n8n), an expected error shown as a toast, the Trusted Lender toggle, admin removal of a listing with a pending request, and the Automation health panel.</sub>
+
+## Features
+
+- **Public landing:** tagline plus a read-only grid of tools showing only name and category.
+- **Tools catalog:**
+  - Category filter kept in the URL.
+  - Availability badges ("Available", "On loan until …", "Requested"), lender's first name and a Trusted Lender badge.
+  - "Request to borrow" dialog with a range picker and inline validation.
+- **My listings:** create, edit and delete your tools (soft delete; blocked while loans are open).
+- **My requests / Incoming:** borrower and lender views.
+  - Approve, decline, cancel and mark returned, each behind a confirmation.
+  - Each loan card has an activity feed, e.g. "Lender notified 3 hours ago" or "Reminder sent".
+- **Admin:** remove any listing, see every loan, toggle Trusted Lender, and an **Automation health** panel. Failed or retrying notifications, failed reminders and n8n workflow errors all show up there, so nothing fails silently.
+- **n8n automation:**
+  - Signed loan-event emails, deduplicated per event.
+  - Daily 09:00 overdue reminders with an idempotent write-back to Convex.
+  - An error workflow that alerts the admin and reports to Convex.
+
+## How it fits together
+
+```mermaid
+flowchart LR
+  UI["Next.js 16<br/>shadcn/ui"] -- "Clerk JWT" --> CX["Convex<br/>queries · mutations · RBAC"]
+  UI -- sign in --> CL["Clerk"]
+  CX -- "outbox → scheduler → signed webhook" --> N8N["n8n<br/>3 workflows"]
+  N8N -- "signed HTTP<br/>/n8n/*" --> CX
+  N8N -- SMTP --> MP["Mailpit<br/>localhost:8025"]
+```
+
+- **Convex** is the single source of truth and the only place authorization
+  happens.
+- **Status changes and notifications:** every status change writes a
+  notification to an outbox **in the same transaction** and schedules its
+  delivery. Delivery is retried with backoff and surfaced to admins if it
+  keeps failing.
+- **Signing:** each direction has its own secret (HMAC-SHA256 over
+  `timestamp.rawBody`, 300 s replay window, constant-time compare).
+
+The full diagrams and the security notes are in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 **Stack:** Next.js 16 (App Router, TypeScript strict) · Clerk · Convex · n8n 2.45 (Docker) · Tailwind 4 + shadcn/ui · Zod · Vitest + convex-test · pnpm
 
@@ -156,3 +198,44 @@ cover:
 - **Outbox:** atomic with the status change, no row when the change is rejected,
   retries and backoff, and payload minimization.
 - **Activity feed, health panel and seed.**
+
+## Project structure
+
+```
+lendloop/
+├─ src/
+│  ├─ app/                    # Next.js routes: landing + (app)/{tools,listings,requests,incoming,admin}
+│  ├─ components/             # feature components (tools, loans, admin, app-shell) + shadcn/ui
+│  ├─ lib/                    # client helpers: error mapping, labels, date formatting
+│  └─ proxy.ts                # clerkMiddleware (Next 16 renamed middleware → proxy)
+├─ convex/
+│  ├─ schema.ts               # users, tools, loans, notificationOutbox, reminders, automationEvents
+│  ├─ lib/                    # auth helpers, loan state machine, HMAC, outbox, validation, dates
+│  ├─ users.ts tools.ts loans.ts admin.ts
+│  ├─ notifications.ts        # outbox delivery to n8n, retries, stuck-event sweeper
+│  ├─ automation.ts http.ts   # signed endpoints called by n8n + idempotent write-backs
+│  ├─ crons.ts seed.ts
+│  └─ *.test.ts               # convex-test suites (not deployed)
+├─ n8n/
+│  ├─ workflows/              # exported JSON: request-notification, overdue-reminders, error-handler
+│  └─ README.md               # workflow internals, import/export, smoke tests
+├─ scripts/                   # setup-local, n8n import/export/credentials, check-secrets, smoke test
+├─ docs/                      # ARCHITECTURE, DECISIONS, PRODUCTION
+├─ docker-compose.yml         # n8n 2.45.7 + Postgres 17 + Mailpit
+└─ .github/workflows/ci.yml   # typecheck · lint · test · secret scan
+```
+
+## Troubleshooting
+
+These are the problems that came up while building and testing this.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `ERR_UNKNOWN_BUILTIN_MODULE: node:sqlite` or "pnpm requires Node 22.13" | pnpm 11 needs Node 22 | `nvm install 22 && nvm alias default 22`, then open a new terminal |
+| Clerk says you're signed in, but the page still shows "Sign in", plus a `cannot_render_single_session_enabled` notice | Convex is rejecting the Clerk token | Activate **Integrations → Convex** in Clerk. Then make Convex re-read `auth.config.ts` (it only does on push): restart `npx convex dev`, or touch `convex/auth.config.ts` |
+| Your user shows up as "Neighbor" with no email; `admin:setRole` says "No user with email" | The Clerk session token has no `name`/`email` claims | Add them under **Sessions → Customize session token** (see Prerequisites) and reload |
+| Webhook returns 404 "not registered" | Workflows weren't published, or n8n wasn't restarted | `pnpm n8n:import` (it publishes and restarts) |
+| Error workflow never runs ("is not active and cannot be executed" in the n8n logs) | n8n 2.x only calls *published* error workflows, and never for manual editor runs | `pnpm n8n:import` publishes it. Trigger it with `pnpm n8n:smoke unknown` |
+| `n8n execute` says "Task Broker's port 5679 is already in use" | The running n8n holds the default broker port | Use `pnpm n8n:remind`, which sets `N8N_RUNNERS_BROKER_PORT` |
+| Next.js dev overlay shows a hydration mismatch with `data-gr-*` attributes | A browser extension (Grammarly) edits `<body>` before React hydrates | Harmless; `<body>` has `suppressHydrationWarning` |
+
