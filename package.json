@@ -11,7 +11,16 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "stack:up": "docker compose --env-file n8n/.env up -d",
+    "stack:down": "docker compose --env-file n8n/.env down",
+    "n8n:import": "scripts/n8n.sh import",
+    "n8n:export": "scripts/n8n.sh export",
+    "n8n:credentials": "scripts/n8n.sh credentials",
+    "check-secrets": "scripts/check-secrets.sh",
+    "n8n:smoke": "node scripts/n8n-smoke.mjs",
+    "n8n:remind": "docker compose --env-file n8n/.env exec -T -e N8N_RUNNERS_BROKER_PORT=5681 n8n n8n execute --id=LLoverdueRemind1",
+    "seed": "convex run seed:run"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

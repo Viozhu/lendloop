@@ -140,3 +140,73 @@ The overdue query skips loans with a `sent` reminder for today's key and
 includes loans whose reminder `failed`, so the next run retries them. The
 write-back inserts when the key is absent, upgrades `failed` to `sent`, and
 answers `{ duplicate: true }` otherwise.
+
+## D20. Local networking: Convex local deployment, n8n in Docker
+
+Default setup is a Convex **local** deployment (`npx convex dev`, HTTP actions
+on `127.0.0.1:3211`) plus n8n in Docker. Convex calls
+`http://localhost:5678/webhook/...` directly. n8n calls Convex at
+`http://host.docker.internal:3211`. Docker Desktop forwards that to the host's
+loopback; on Linux the `extra_hosts: host-gateway` entry provides the name.
+Verified end to end on macOS: both directions, the error path, and the reminder
+write-back.
+
+With a cloud Convex deployment, Convex can't reach your laptop. Expose n8n
+through a tunnel (`cloudflared tunnel --url http://localhost:5678` or ngrok),
+set `N8N_NOTIFY_WEBHOOK_URL` in Convex to the tunnel URL, set `WEBHOOK_URL` in
+n8n to it as well, and point `CONVEX_HTTP_URL` in `n8n/.env` at
+`https://<deployment>.convex.site`.
+
+## D21. Dedup in workflow static data, not Remove Duplicates (Deviation)
+
+Remove Duplicates ("across executions") stores the value as soon as the item
+passes through, before the email is sent. If the send then fails and Convex
+retries, the retry would be treated as a duplicate and the notification lost
+while Convex sees a 200. The workflow keeps sent `eventId`s in
+`$getWorkflowStaticData('global')` and writes them only after a successful
+send. Entries expire after 7 days, far beyond Convex's ~13 minute retry window.
+
+## D22. Fixed workflow ids are kept in the export (Deviation)
+
+The brief says to strip `id` on export. `settings.errorWorkflow` references the
+error handler by id, so stripping ids would break that link on every import.
+The three workflows use fixed ids (`LLloanNotify0001`, `LLoverdueRemind1`,
+`LLerrorHandler01`) and the export keeps them. Instance-specific fields
+(`versionId`, `meta.instanceId`, `pinData`, `staticData`, timestamps) are still
+stripped.
+
+## D23. n8n 2.x specifics
+
+- "Active" is now "published": `pnpm n8n:import` runs `n8n publish:workflow`
+  and restarts n8n, which loads published state at startup.
+- The error workflow must be published too, or n8n refuses to call it.
+- `N8N_BLOCK_ENV_ACCESS_IN_NODE` defaults to `true` in 2.x; compose sets it to
+  `false` because the Code nodes read the shared secrets through `$env`.
+  `NODE_FUNCTION_ALLOW_BUILTIN=crypto` allows `require('crypto')`.
+- Task runners run in internal mode, which is deprecated but fine locally.
+  PRODUCTION.md covers external runners.
+- n8n 2.45 warns that Postgres 16 is outside its supported range, so the stack
+  pins Postgres 17.
+- The Webhook node's Raw Body option puts the bytes in binary property `data`,
+  read with `this.helpers.getBinaryDataBuffer(0, 'data')`.
+
+## D24. Event routing: Switch plus one Edit Fields node per type
+
+The webhook workflow routes on `type` with a Switch node whose outputs are
+named after the event types. Each output feeds a small "Compose" node with the
+subject and body as expressions, so editing a message needs no code. Unknown
+types go to a Stop and Error node, which fails the execution, triggers the
+error workflow, and makes Convex retry and then park the event as failed.
+
+## D25. `APP_BASE_URL` lives in n8n, not in the payload
+
+Links in emails are built in n8n from `$env.APP_BASE_URL`. The Convex payload
+stays exactly the documented minimal shape. Convex still has `APP_BASE_URL`
+set, so a future channel built in Convex could use it.
+
+## D26. Mailpit credential created by script
+
+`pnpm n8n:credentials` writes the Mailpit SMTP credential to a git-ignored file,
+imports it with a fixed id, and deletes the file. Mailpit needs no
+authentication, so the credential contains no secret, but credential files
+never go into the repo anyway. The README also documents the manual UI steps.

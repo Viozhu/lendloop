@@ -46,3 +46,7 @@ next-env.d.ts
 
 # agent tooling state
 /.omc/
+
+# n8n credential files are generated locally and never committed
+/n8n/credentials/.local/
+/n8n/workflows/.export/

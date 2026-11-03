@@ -1,0 +1,156 @@
+{
+  "id": "LLerrorHandler01",
+  "name": "LendLoop · Error handler",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "d81193c0-c20b-553c-ab91-cee772214c69",
+      "name": "On workflow error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Error Trigger payload -> the few fields we report. No item data is copied,\n// so no personal data ends up in alerts or in Convex.\nconst { execution = {}, workflow = {}, trigger } = $input.first().json;\nconst error = execution.error ?? trigger?.error ?? {};\nconst summary = {\n  executionId: String(execution.id ?? `trigger-${Date.now()}`),\n  workflowName: String(workflow.name ?? 'Unknown workflow'),\n  nodeName: execution.lastNodeExecuted ?? trigger?.error?.node?.name ?? undefined,\n  message: String(error.message ?? 'Unknown error').slice(0, 1000),\n  url: execution.url ?? null,\n};\nconsole.log(`[lendloop] workflow error execution=${summary.executionId} workflow=\"${summary.workflowName}\" node=\"${summary.nodeName ?? '-'}\"`);\nreturn [{ json: summary }];\n"
+      },
+      "id": "0c605053-cc10-5ab0-a151-5e4aacc8d942",
+      "name": "Summarize error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "LendLoop <notifications@lendloop.local>",
+        "toEmail": "={{ $env.ADMIN_ALERT_EMAIL }}",
+        "subject": "=[LendLoop] Workflow failed: {{ $json.workflowName }}",
+        "emailFormat": "text",
+        "text": "=Workflow: {{ $json.workflowName }}\nFailed node: {{ $json.nodeName || '-' }}\nExecution: {{ $json.executionId }}\nError: {{ $json.message }}\n\n{{ $json.url ? 'Open execution: ' + $json.url : '' }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "857ec509-cec3-5c6c-a7f8-4e67e62903d8",
+      "name": "Alert admin",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        460,
+        180
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "LLmailpitSmtp001",
+          "name": "Mailpit SMTP"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Signs a request to Convex: sha256=HMAC_SHA256(N8N_TO_CONVEX_SECRET, `${timestamp}.${body}`).\nconst crypto = require('crypto');\nfunction sign(body) {\n  const timestamp = String(Math.floor(Date.now() / 1000));\n  const signature = 'sha256=' + crypto\n    .createHmac('sha256', $env.N8N_TO_CONVEX_SECRET)\n    .update(`${timestamp}.${body}`)\n    .digest('hex');\n  return { body, timestamp, signature };\n}\n\nconst { executionId, workflowName, nodeName, message } = $('Summarize error').first().json;\nreturn [{ json: sign(JSON.stringify({ executionId, workflowName, nodeName, message })) }];\n"
+      },
+      "id": "9b22cf04-be5c-5188-b19a-5d38a5a628f1",
+      "name": "Sign error report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_HTTP_URL }}/n8n/automation-errors",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}"
+      },
+      "id": "f701e62a-24a8-5ebe-b371-be76adeffa2e",
+      "name": "Report to Convex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        420
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "On workflow error": {
+      "main": [
+        [
+          {
+            "node": "Summarize error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize error": {
+      "main": [
+        [
+          {
+            "node": "Alert admin",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sign error report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign error report": {
+      "main": [
+        [
+          {
+            "node": "Report to Convex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": []
+}

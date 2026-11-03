@@ -1,0 +1,807 @@
+{
+  "id": "LLloanNotify0001",
+  "name": "LendLoop · Loan notifications",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lendloop-loan-events",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "8e3c750d-8fa7-514c-aae0-03143e6d8cbf",
+      "name": "Loan event webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "1e441f86-1c24-53e5-865e-c215df773588"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verifies X-LendLoop-Signature against the *raw* body (Webhook \"Raw Body\" option):\n// sha256=HMAC_SHA256(CONVEX_TO_N8N_SECRET, `${timestamp}.${rawBody}`), constant-time\n// compare, and a 300 s window against replays.\nconst crypto = require('crypto');\nconst MAX_SKEW_SECONDS = 300;\n\nconst headers = $input.first().json.headers ?? {};\nconst timestamp = String(headers['x-lendloop-timestamp'] ?? '');\nconst signature = String(headers['x-lendloop-signature'] ?? '').trim().toLowerCase();\nconst secret = $env.CONVEX_TO_N8N_SECRET;\n\nlet rawBody = '';\ntry {\n  rawBody = (await this.helpers.getBinaryDataBuffer(0, 'data')).toString('utf8');\n} catch {\n  // No body at all: verification below fails.\n}\n\nfunction failureReason() {\n  if (!secret) return 'not_configured';\n  if (!/^\\d{1,12}$/.test(timestamp) || !signature) return 'missing_headers';\n  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > MAX_SKEW_SECONDS) return 'stale_timestamp';\n  const expected = Buffer.from(\n    'sha256=' + crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex'),\n  );\n  const given = Buffer.from(signature);\n  return expected.length === given.length && crypto.timingSafeEqual(expected, given) ? null : 'bad_signature';\n}\n\nconst reason = failureReason();\nif (reason) return [{ json: { valid: false, reason } }];\nreturn [{ json: { valid: true, event: JSON.parse(rawBody) } }];\n"
+      },
+      "id": "c62ead68-ecfa-5cbf-bc6b-3e98289992a1",
+      "name": "Verify signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "15fd06bc-837c-51be-8fbc-bdd85e84b922",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b0b98da6-cd18-5ef0-9429-7708259bda20",
+      "name": "Signature valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"error\": \"invalid_signature\"}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "84d7e5c6-13f1-5aba-9011-ccf6a42efd66",
+      "name": "Reject: 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        660,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Convex retries until it gets a 2xx, so an event can arrive twice (for example\n// when the email went out but the response was lost). Only events whose email\n// was actually sent are remembered (see \"Remember event\"), so a failed send is\n// retried instead of being dropped. Static data persists for production runs.\nconst event = $input.first().json.event;\nconst sent = $getWorkflowStaticData('global').sentEventIds ?? {};\nreturn [{ json: { event, duplicate: Boolean(sent[event.eventId]) } }];\n"
+      },
+      "id": "5a8f9956-9241-5b2b-98a0-290b12df805b",
+      "name": "Check duplicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1fb6c1ab-18fe-58fe-bd32-3f80c513da81",
+              "leftValue": "={{ $json.duplicate }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "41fa0170-9925-57ed-82c7-8167b586b416",
+      "name": "Already sent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"received\": true, \"duplicate\": true}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "f37fb7b4-2c3a-5e25-94bd-d5ee7e1d40ce",
+      "name": "Ack duplicate: 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1100,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.event.type }}",
+                    "rightValue": "loan.requested",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "15f9540d-8a5a-5b68-bee9-e7896ad34f82"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "loan.requested"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.event.type }}",
+                    "rightValue": "loan.approved",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "5b8549a4-d98d-5fb3-902e-2cf8037c499a"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "loan.approved"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.event.type }}",
+                    "rightValue": "loan.declined",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "f7d0148d-941d-5405-8e12-5965b3a56ddc"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "loan.declined"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.event.type }}",
+                    "rightValue": "loan.cancelled",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "078b671c-bae5-5339-871e-dd1aff164a2b"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "loan.cancelled"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.event.type }}",
+                    "rightValue": "loan.returned",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "d85008d6-e341-501c-baf3-a510d221b4b8"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "loan.returned"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "unknown"
+        }
+      },
+      "id": "2046e572-5e6c-53be-9ef5-422b4b5b52e6",
+      "name": "Route by event type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a7b57525-bb38-59b6-ac72-5331f44c48fd",
+              "name": "eventId",
+              "value": "={{ $('Check duplicate').item.json.event.eventId }}",
+              "type": "string"
+            },
+            {
+              "id": "8c660473-d239-5514-93dc-1e6ded00181a",
+              "name": "to",
+              "value": "={{ $('Check duplicate').item.json.event.recipient.email }}",
+              "type": "string"
+            },
+            {
+              "id": "fbde24b0-bd44-596a-806f-c7a9112f3928",
+              "name": "subject",
+              "value": "=New request for your {{ $('Check duplicate').item.json.event.tool.name }}",
+              "type": "string"
+            },
+            {
+              "id": "e803be62-6c22-5df2-8c53-4c75b04924ee",
+              "name": "text",
+              "value": "=Hi {{ $('Check duplicate').item.json.event.recipient.firstName }},\n\nA neighbor would like to borrow your {{ $('Check duplicate').item.json.event.tool.name }} from {{ $('Check duplicate').item.json.event.loan.startDate }} to {{ $('Check duplicate').item.json.event.loan.endDate }}.\n\nApprove or decline it here: {{ $env.APP_BASE_URL }}/incoming\n\n— LendLoop\nBorrow what you need. Lend what you don't.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f18ddc08-30fc-5e3c-87fb-74f4eae22b0b",
+      "name": "Compose: requested",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1340,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a43d6ad9-2b05-53cc-b877-cdf0fbf80419",
+              "name": "eventId",
+              "value": "={{ $('Check duplicate').item.json.event.eventId }}",
+              "type": "string"
+            },
+            {
+              "id": "5a7afeaa-417c-560f-83d4-424dbc2bfa75",
+              "name": "to",
+              "value": "={{ $('Check duplicate').item.json.event.recipient.email }}",
+              "type": "string"
+            },
+            {
+              "id": "bffec2db-8203-5120-ab40-2b6af74ab8fe",
+              "name": "subject",
+              "value": "=Approved: you can borrow the {{ $('Check duplicate').item.json.event.tool.name }}",
+              "type": "string"
+            },
+            {
+              "id": "cd745348-834a-5290-afc3-ce10fb70657c",
+              "name": "text",
+              "value": "=Hi {{ $('Check duplicate').item.json.event.recipient.firstName }},\n\nGood news: your request to borrow the {{ $('Check duplicate').item.json.event.tool.name }} from {{ $('Check duplicate').item.json.event.loan.startDate }} to {{ $('Check duplicate').item.json.event.loan.endDate }} was approved.\n\nSee your requests: {{ $env.APP_BASE_URL }}/requests\n\n— LendLoop\nBorrow what you need. Lend what you don't.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "70b68605-641f-5efb-ba9f-16f80f114be2",
+      "name": "Compose: approved",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1340,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "86ccf880-7c1f-5b17-8141-8b68f58edfd6",
+              "name": "eventId",
+              "value": "={{ $('Check duplicate').item.json.event.eventId }}",
+              "type": "string"
+            },
+            {
+              "id": "38e199e7-69d0-5194-b485-fb629fa382df",
+              "name": "to",
+              "value": "={{ $('Check duplicate').item.json.event.recipient.email }}",
+              "type": "string"
+            },
+            {
+              "id": "df4bfa49-8d4e-573c-81b5-8d2d136dd9c3",
+              "name": "subject",
+              "value": "=Your request for the {{ $('Check duplicate').item.json.event.tool.name }} was declined",
+              "type": "string"
+            },
+            {
+              "id": "f21e049b-b628-5b0f-8c17-b856744c09f2",
+              "name": "text",
+              "value": "=Hi {{ $('Check duplicate').item.json.event.recipient.firstName }},\n\nYour request to borrow the {{ $('Check duplicate').item.json.event.tool.name }} from {{ $('Check duplicate').item.json.event.loan.startDate }} to {{ $('Check duplicate').item.json.event.loan.endDate }} was declined. Other neighbors may have one to lend.\n\nBrowse tools: {{ $env.APP_BASE_URL }}/tools\n\n— LendLoop\nBorrow what you need. Lend what you don't.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "64880dd8-c0fc-574d-a0cb-9f91b4244369",
+      "name": "Compose: declined",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1340,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fd56a2d4-2195-5c38-a3a6-bd90295be658",
+              "name": "eventId",
+              "value": "={{ $('Check duplicate').item.json.event.eventId }}",
+              "type": "string"
+            },
+            {
+              "id": "45eacf10-27f9-597b-a09c-fec3af9f3076",
+              "name": "to",
+              "value": "={{ $('Check duplicate').item.json.event.recipient.email }}",
+              "type": "string"
+            },
+            {
+              "id": "2c0e6b21-6bac-5aa5-8a34-fca8b9974bea",
+              "name": "subject",
+              "value": "=A request for your {{ $('Check duplicate').item.json.event.tool.name }} was cancelled",
+              "type": "string"
+            },
+            {
+              "id": "4413b2f6-2734-5542-8813-85dacc8df5fb",
+              "name": "text",
+              "value": "=Hi {{ $('Check duplicate').item.json.event.recipient.firstName }},\n\nThe request to borrow your {{ $('Check duplicate').item.json.event.tool.name }} from {{ $('Check duplicate').item.json.event.loan.startDate }} to {{ $('Check duplicate').item.json.event.loan.endDate }} was cancelled by the borrower. Nothing else to do.\n\nIncoming requests: {{ $env.APP_BASE_URL }}/incoming\n\n— LendLoop\nBorrow what you need. Lend what you don't.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6cd1822e-5eaf-5041-a544-5f7a1fcbe761",
+      "name": "Compose: cancelled",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1340,
+        470
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b18bce76-3c6a-5b15-83a7-454766ed1baa",
+              "name": "eventId",
+              "value": "={{ $('Check duplicate').item.json.event.eventId }}",
+              "type": "string"
+            },
+            {
+              "id": "8f4dfb40-f12d-5850-9c8c-94af2cc2cb6b",
+              "name": "to",
+              "value": "={{ $('Check duplicate').item.json.event.recipient.email }}",
+              "type": "string"
+            },
+            {
+              "id": "6ff52f9f-3019-550b-9d7c-44885f0934a7",
+              "name": "subject",
+              "value": "=Thanks for returning the {{ $('Check duplicate').item.json.event.tool.name }}",
+              "type": "string"
+            },
+            {
+              "id": "8e378782-6670-5d2c-a277-f0294b0fd82c",
+              "name": "text",
+              "value": "=Hi {{ $('Check duplicate').item.json.event.recipient.firstName }},\n\nThe lender marked the {{ $('Check duplicate').item.json.event.tool.name }} as returned. Thanks for taking good care of it.\n\nYour requests: {{ $env.APP_BASE_URL }}/requests\n\n— LendLoop\nBorrow what you need. Lend what you don't.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "58d7de48-3816-561e-987f-feff2e0631b0",
+      "name": "Compose: returned",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1340,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "=Unknown loan event type: {{ $json.event.type }}"
+      },
+      "id": "50325171-b808-5c3a-afac-f75673269ef5",
+      "name": "Unknown event type",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "LendLoop <notifications@lendloop.local>",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "7ff5fc73-1cac-51ce-ab74-c6a79dee1dab",
+      "name": "Send email (Mailpit)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1580,
+        300
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "LLmailpitSmtp001",
+          "name": "Mailpit SMTP"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Record the event as sent and forget entries older than a week (Convex stops\n// retrying after ~13 minutes, so a week is a generous window).\nconst WEEK_MS = 7 * 24 * 60 * 60 * 1000;\nconst staticData = $getWorkflowStaticData('global');\nconst sent = staticData.sentEventIds ?? {};\nconst now = Date.now();\nfor (const [id, at] of Object.entries(sent)) {\n  if (now - at > WEEK_MS) delete sent[id];\n}\nconst { eventId, type } = $('Check duplicate').first().json.event;\nsent[eventId] = now;\nstaticData.sentEventIds = sent;\nreturn [{ json: { eventId, type } }];\n"
+      },
+      "id": "940ea3f1-74ad-5de3-bc5c-d8e6809eae78",
+      "name": "Remember event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mock channel: logs that a notification went out without any personal data,\n// standing in for Slack/Discord/SMS in this demo.\nconst { eventId, type } = $input.first().json;\nconsole.log(`[lendloop] notification sent type=${type} eventId=${eventId}`);\nreturn $input.all();\n"
+      },
+      "id": "809e1221-a502-54a1-9e5c-eca34a64dffb",
+      "name": "Log mock notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"received\": true}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "f0c792af-44dc-5d3e-81a2-c889ea99a75a",
+      "name": "Ack: 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2020,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"error\": \"send_failed\"}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "f35e144e-480b-505f-a116-44105b975277",
+      "name": "Send failed: 502",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1800,
+        460
+      ]
+    }
+  ],
+  "connections": {
+    "Loan event webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify signature": {
+      "main": [
+        [
+          {
+            "node": "Signature valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature valid?": {
+      "main": [
+        [
+          {
+            "node": "Check duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject: 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check duplicate": {
+      "main": [
+        [
+          {
+            "node": "Already sent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already sent?": {
+      "main": [
+        [
+          {
+            "node": "Ack duplicate: 200",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route by event type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by event type": {
+      "main": [
+        [
+          {
+            "node": "Compose: requested",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compose: approved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compose: declined",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compose: cancelled",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compose: returned",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unknown event type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose: requested": {
+      "main": [
+        [
+          {
+            "node": "Send email (Mailpit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose: approved": {
+      "main": [
+        [
+          {
+            "node": "Send email (Mailpit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose: declined": {
+      "main": [
+        [
+          {
+            "node": "Send email (Mailpit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose: cancelled": {
+      "main": [
+        [
+          {
+            "node": "Send email (Mailpit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose: returned": {
+      "main": [
+        [
+          {
+            "node": "Send email (Mailpit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email (Mailpit)": {
+      "main": [
+        [
+          {
+            "node": "Remember event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send failed: 502",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remember event": {
+      "main": [
+        [
+          {
+            "node": "Log mock notification",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ack: 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": "LLerrorHandler01"
+  },
+  "tags": []
+}
