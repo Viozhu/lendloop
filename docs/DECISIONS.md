@@ -53,3 +53,29 @@ Vite does not support that extglob (it matched nothing), so
 
 pnpm 11 requires Node >= 22.13. `.nvmrc` pins 22 and `package.json#engines`
 enforces it.
+
+## D9. Availability is derived, and overdue loans still count as "on loan"
+
+Nothing about availability is stored. A tool is "On loan until <endDate>" while
+an approved loan has started and has not been marked returned. That includes
+overdue loans, because the tool is physically still out. Approved loans that
+start in the future don't make a tool unavailable today. "Requested" is shown
+per viewer: it means *you* have a pending request on that tool.
+
+## D10. Owners can't delete a tool with open requests or loans
+
+`tools.remove` refuses with `CONFLICT` while a pending or approved loan exists,
+instead of silently cancelling other people's requests. The owner resolves them
+first (decline or mark returned), which also triggers the right notifications.
+
+## D11. Shared Zod schema for tool input
+
+`convex/lib/toolInput.ts` is imported by both the listing form (inline errors)
+and the mutations (the authority). Convex validators guard types at the API
+boundary; Zod adds business limits (trimmed length, description <= 500 chars).
+
+## D12. Client waits for `users.store` before rendering app pages
+
+`EnsureUser` upserts the user row once Convex validates the Clerk token, and
+holds the page until it completes, so queries that call `requireUser` never race
+the first sign-in.

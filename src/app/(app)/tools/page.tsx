@@ -1,10 +1,5 @@
-import { PublicToolGrid } from "@/components/public-tool-grid";
+import { ToolCatalog } from "@/components/tools/tool-catalog";
 
 export default function ToolsPage() {
-  return (
-    <>
-      <h1 className="text-2xl font-semibold tracking-tight">Tools</h1>
-      <PublicToolGrid />
-    </>
-  );
+  return <ToolCatalog />;
 }

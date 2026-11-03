@@ -5,7 +5,10 @@ import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 
-const NAV_ITEMS = [{ href: "/tools", label: "Tools" }] as const;
+const NAV_ITEMS = [
+  { href: "/tools", label: "Tools" },
+  { href: "/listings", label: "My listings" },
+] as const;
 
 export function AppNav() {
   const pathname = usePathname();

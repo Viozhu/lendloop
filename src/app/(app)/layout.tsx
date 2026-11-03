@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import { auth } from "@clerk/nextjs/server";
 import { AppNav } from "@/components/app-shell/app-nav";
+import { EnsureUser } from "@/components/app-shell/ensure-user";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -10,7 +11,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8">
         {/* auth() reads the request, so Cache Components requires a Suspense boundary. */}
         <Suspense fallback={<PageSkeleton />}>
-          <SignedInOnly>{children}</SignedInOnly>
+          <SignedInOnly>
+            <EnsureUser>{children}</EnsureUser>
+          </SignedInOnly>
         </Suspense>
       </main>
     </div>
