@@ -7,7 +7,6 @@ them for a date range, owners approve or decline, and loans get marked as
 returned. n8n sends the notifications and a daily overdue reminder. If
 automation fails, it shows up in an admin panel.
 
-![LendLoop walkthrough: approving a request, Trusted Lender, admin removal and automation health](docs/media/walkthrough.gif)
 
 <sub>Recorded against the local stack: approve a request (the borrower is notified through n8n), an expected error shown as a toast, the Trusted Lender toggle, admin removal of a listing with a pending request, and the Automation health panel.</sub>
 
