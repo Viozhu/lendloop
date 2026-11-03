@@ -18,6 +18,19 @@ describe("tools.listPublic", () => {
   });
 });
 
+describe("tools ordering", () => {
+  it("lists the newest tools first regardless of category", async () => {
+    const t = setup();
+    const { userId, as } = await createUser(t, { name: "Olivia Owner" });
+    await as.mutation(api.tools.create, { ...validTool, name: "Old other", category: "other" });
+    await as.mutation(api.tools.create, { ...validTool, name: "New camping", category: "camping" });
+
+    expect((await t.query(api.tools.listPublic, {})).map((x) => x.name)).toEqual(["New camping", "Old other"]);
+    expect((await as.query(api.tools.list, {})).map((x) => x.name)).toEqual(["New camping", "Old other"]);
+    void userId;
+  });
+});
+
 describe("tools RBAC", () => {
   it("rejects unauthenticated callers", async () => {
     const t = setup();

@@ -113,6 +113,7 @@ describe("loan transitions RBAC", () => {
     await lender.as.mutation(api.loans.approve, { loanId });
     await expectCode(borrower.as.mutation(api.loans.cancel, { loanId }), "INVALID_TRANSITION");
     await expectCode(lender.as.mutation(api.loans.decline, { loanId }), "INVALID_TRANSITION");
+    vi.setSystemTime(new Date("2026-06-03T12:00:00Z")); // the loan has started
     await lender.as.mutation(api.loans.markReturned, { loanId });
     await expectCode(lender.as.mutation(api.loans.approve, { loanId }), "INVALID_TRANSITION");
 
@@ -194,3 +195,34 @@ describe("loan lists", () => {
     expect(await other.as.query(api.loans.listIncoming, {})).toEqual([]);
   });
 });
+
+describe("review regressions", () => {
+  it("treats an overdue, unreturned loan as still blocking the tool", async () => {
+    const { t, lender, borrower, other, toolId } = await scenario();
+    await t.run((ctx) =>
+      ctx.db.insert("loans", {
+        toolId,
+        borrowerId: other.userId,
+        lenderId: lender.userId,
+        startDate: "2026-05-20",
+        endDate: "2026-05-25", // overdue on 2026-06-01, never returned
+        status: "approved",
+        createdAt: Date.now(),
+      }),
+    );
+    // Starts today, while the overdue tool hasn't come back.
+    const loanId = await borrower.as.mutation(api.loans.request, { toolId, startDate: june(1), endDate: june(3) });
+
+    const [incoming] = (await lender.as.query(api.loans.listIncoming, {})).filter((l) => l._id === loanId);
+    expect(incoming.conflictsWithApproved).toBe(true);
+    await expectCode(lender.as.mutation(api.loans.approve, { loanId }), "CONFLICT");
+  });
+
+  it("refuses to mark a loan returned before it starts", async () => {
+    const { lender, borrower, toolId } = await scenario();
+    const loanId = await borrower.as.mutation(api.loans.request, { toolId, startDate: june(10), endDate: june(12) });
+    await lender.as.mutation(api.loans.approve, { loanId });
+    await expectCode(lender.as.mutation(api.loans.markReturned, { loanId }), "CONFLICT");
+  });
+});
+

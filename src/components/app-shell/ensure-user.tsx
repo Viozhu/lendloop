@@ -25,7 +25,8 @@ export function EnsureUser({ children }: { children: ReactNode }) {
     };
   }, [isAuthenticated, storeUser]);
 
-  if (state === "ready") return children;
+  // Signed out or token expired: never keep rendering pages from a past session.
+  if (state === "ready" && isAuthenticated) return children;
 
   if (state === "failed" || (!isLoading && !isAuthenticated)) {
     return (

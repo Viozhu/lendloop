@@ -41,7 +41,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_owner", ["ownerId"])
-    // isActive first so the same index serves "all active" and "active in category".
+    // Unfiltered lists: newest active tools first.
+    .index("by_active", ["isActive"])
     .index("by_active_category", ["isActive", "category"]),
 
   loans: defineTable({

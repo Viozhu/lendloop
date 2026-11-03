@@ -9,7 +9,12 @@ import type { NotificationType } from "./lib/validators";
 // Total attempts = 1 immediate + 3 retries. Delays are applied after each failure.
 export const RETRY_DELAYS_MS = [30_000, 2 * 60_000, 10 * 60_000];
 const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
-const REQUEST_TIMEOUT_MS = 10_000;
+// Longer than the n8n workflow's worst case (3 SMTP tries, 2 s apart) against a
+// healthy SMTP server, so Convex doesn't retry while n8n is still sending.
+const REQUEST_TIMEOUT_MS = 30_000;
+// A pending event untouched for this long lost its scheduled job (crash,
+// restart, action timeout); the sweeper reschedules it.
+const STUCK_AFTER_MS = 5 * 60_000;
 
 /** Everything `deliver` needs, or null when there is nothing left to send. */
 export const getDelivery = internalQuery({
@@ -23,18 +28,23 @@ export const getDelivery = internalQuery({
 
     const loan = await ctx.db.get(event.loanId);
     const recipient = await ctx.db.get(event.recipientUserId);
-    if (!loan || !recipient) return null;
+    if (!loan || !recipient) {
+      return { kind: "undeliverable" as const, reason: "loan or recipient no longer exists" };
+    }
     const tool = await ctx.db.get(loan.toolId);
 
     // Minimal payload: what the email needs and nothing more. No descriptions,
     // no other party's contact details, no internal user ids.
     return {
-      eventId,
-      type: event.type,
+      kind: "send" as const,
+      payload: {
+        eventId,
+        type: event.type,
       occurredAt: new Date(event._creationTime).toISOString(),
       recipient: { firstName: firstName(recipient.name), email: recipient.email },
       tool: { name: tool?.name ?? "a tool" },
-      loan: { id: loan._id, startDate: loan.startDate, endDate: loan.endDate, status: loan.status },
+        loan: { id: loan._id, startDate: loan.startDate, endDate: loan.endDate, status: loan.status },
+      },
     };
   },
 });
@@ -43,8 +53,13 @@ export const getDelivery = internalQuery({
 export const deliver = internalAction({
   args: { eventId: v.string() },
   handler: async (ctx, { eventId }) => {
-    const payload = await ctx.runQuery(internal.notifications.getDelivery, { eventId });
-    if (!payload) return;
+    const delivery = await ctx.runQuery(internal.notifications.getDelivery, { eventId });
+    if (!delivery) return;
+    if (delivery.kind === "undeliverable") {
+      await ctx.runMutation(internal.notifications.recordFailure, { eventId, error: delivery.reason, final: true });
+      return;
+    }
+    const { payload } = delivery;
 
     const error = await postToN8n(JSON.stringify(payload));
     if (error === null) {
@@ -104,8 +119,8 @@ export const markDelivered = internalMutation({
 });
 
 export const recordFailure = internalMutation({
-  args: { eventId: v.string(), error: v.string() },
-  handler: async (ctx, { eventId, error }) => {
+  args: { eventId: v.string(), error: v.string(), final: v.optional(v.boolean()) },
+  handler: async (ctx, { eventId, error, final = false }) => {
     const event = await ctx.db
       .query("notificationOutbox")
       .withIndex("by_eventId", (q) => q.eq("eventId", eventId))
@@ -115,7 +130,7 @@ export const recordFailure = internalMutation({
     const attempts = event.attempts + 1;
     const now = Date.now();
 
-    if (attempts < MAX_ATTEMPTS) {
+    if (!final && attempts < MAX_ATTEMPTS) {
       const delay = RETRY_DELAYS_MS[attempts - 1];
       await ctx.db.patch(event._id, { attempts, lastError: error, nextAttemptAt: now + delay });
       await ctx.scheduler.runAfter(delay, internal.notifications.deliver, { eventId });
@@ -132,6 +147,31 @@ export const recordFailure = internalMutation({
       externalId: `outbox:${eventId}:failed`,
       createdAt: now,
     });
+  },
+});
+
+/**
+ * Safety net for at-most-once scheduled actions: if `deliver` died before it
+ * could record a result, nothing would ever retry it. Runs from crons.ts.
+ */
+export const sweepStuck = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const pending = await ctx.db
+      .query("notificationOutbox")
+      .withIndex("by_status", (q) => q.eq("status", "pending"))
+      .take(500);
+    let rescheduled = 0;
+    for (const event of pending) {
+      const dueAt = event.nextAttemptAt ?? event._creationTime;
+      if (now - dueAt < STUCK_AFTER_MS) continue;
+      await ctx.db.patch(event._id, { nextAttemptAt: now });
+      await ctx.scheduler.runAfter(0, internal.notifications.deliver, { eventId: event.eventId });
+      rescheduled++;
+    }
+    if (rescheduled > 0) console.warn(`outbox sweeper rescheduled ${rescheduled} stuck event(s)`);
+    return { rescheduled };
   },
 });
 

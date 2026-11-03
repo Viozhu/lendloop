@@ -27,7 +27,7 @@ export const listPublic = query({
   handler: async (ctx) => {
     const tools = await ctx.db
       .query("tools")
-      .withIndex("by_active_category", (q) => q.eq("isActive", true))
+      .withIndex("by_active", (q) => q.eq("isActive", true))
       .order("desc")
       .take(PUBLIC_LIST_LIMIT);
     return tools.map(({ _id, name, category }) => ({ _id, name, category }));
@@ -39,11 +39,13 @@ export const list = query({
   args: { category: v.optional(toolCategory) },
   handler: async (ctx, { category }) => {
     const user = await requireUser(ctx);
-    const tools = await ctx.db
-      .query("tools")
-      .withIndex("by_active_category", (q) =>
-        category ? q.eq("isActive", true).eq("category", category) : q.eq("isActive", true),
-      )
+    // Separate indexes so "desc" always means newest first, never "by category".
+    const tools = await (category
+      ? ctx.db
+          .query("tools")
+          .withIndex("by_active_category", (q) => q.eq("isActive", true).eq("category", category))
+      : ctx.db.query("tools").withIndex("by_active", (q) => q.eq("isActive", true))
+    )
       .order("desc")
       .take(LIST_LIMIT);
 

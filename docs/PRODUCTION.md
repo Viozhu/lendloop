@@ -34,6 +34,15 @@ change before real neighbors use it, roughly in priority order.
 - **Per-user notification preferences and one-click unsubscribe**
   (List-Unsubscribe header). Reminders and transactional notices would be
   separate categories.
+- **Atomic dedup in n8n.** Sent `eventId`s live in workflow static data,
+  which is saved at the end of each execution with last writer wins. Two
+  concurrent executions for the same event (an SMTP server slower than
+  Convex's 30 s timeout) could both send. In production, use an
+  insert-if-absent store (a Postgres or Redis node keyed by `eventId`) and cap
+  the SMTP node's timeout below Convex's.
+- **Cancelling an approved future loan.** Today only `approved → returned`
+  exists, and only after the start date. Add `approved → cancelled` (either
+  party, before the start date) with its own notification.
 - **Dead-letter queue and replay UI.** Failed outbox rows already stay in
   `failed`. Add an admin "Retry" action that resets attempts and reschedules,
   plus bulk replay after an outage. Same for failed reminders.

@@ -232,7 +232,21 @@
       ],
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 5000
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Runs once the loop is done. Each write-back continues on error so one bad\n// response can't block the other reminders; failing the run here afterwards\n// sends it to the error workflow, so nothing fails silently.\nconst failed = $input.all().filter((item) => item.json.error);\nif (failed.length > 0) {\n  throw new Error(`${failed.length} reminder write-back(s) to Convex failed; those loans are retried on the next run`);\n}\nreturn [{ json: { remindersRecorded: $input.all().length } }];\n"
+      },
+      "id": "12d4bffa-cb84-5f26-9465-f40d3ee62b08",
+      "name": "Check write-backs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        120
+      ]
     }
   ],
   "connections": {
@@ -293,7 +307,13 @@
     },
     "Loop over loans": {
       "main": [
-        [],
+        [
+          {
+            "node": "Check write-backs",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Compose reminder",

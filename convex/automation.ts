@@ -18,13 +18,15 @@ function reminderKey(loanId: string, day: string): string {
 export const overdueLoans = internalQuery({
   args: { today: v.string() },
   handler: async (ctx, { today }) => {
-    const loans = await ctx.db
+    const loans = ctx.db
       .query("loans")
-      .withIndex("by_status_endDate", (q) => q.eq("status", "approved").lt("endDate", today))
-      .take(OVERDUE_BATCH_LIMIT);
+      .withIndex("by_status_endDate", (q) => q.eq("status", "approved").lt("endDate", today));
 
+    // The limit counts loans still due today, so already-reminded loans can't
+    // crowd newer ones out of the batch.
     const due = [];
-    for (const loan of loans) {
+    for await (const loan of loans) {
+      if (due.length >= OVERDUE_BATCH_LIMIT) break;
       const key = reminderKey(loan._id, today);
       const existing = await ctx.db
         .query("reminders")

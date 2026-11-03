@@ -105,3 +105,35 @@ describe("notifications.deliver", () => {
     expect(scheduled.map((s) => s.name)).toEqual(["notifications:deliver"]);
   });
 });
+
+describe("outbox safety net", () => {
+  it("reschedules a pending event whose delivery job was lost", async () => {
+    const { t, event } = await requestedLoan();
+    // Simulate a crashed first delivery: drop the scheduled job, then wait.
+    await t.run(async (ctx) => {
+      for (const job of await ctx.db.system.query("_scheduled_functions").collect()) {
+        await ctx.scheduler.cancel(job._id);
+      }
+    });
+    vi.setSystemTime(Date.now() + 6 * 60_000);
+
+    expect(await t.mutation(internal.notifications.sweepStuck, {})).toEqual({ rescheduled: 1 });
+    // A fresh event is left alone.
+    expect(await t.mutation(internal.notifications.sweepStuck, {})).toEqual({ rescheduled: 0 });
+    void event;
+  });
+
+  it("parks an event as failed when its loan no longer exists", async () => {
+    const { t, event } = await requestedLoan();
+    await t.run((ctx) => ctx.db.delete(event.loanId));
+    vi.stubGlobal("fetch", vi.fn());
+
+    await t.action(internal.notifications.deliver, { eventId: event.eventId });
+
+    expect(await t.run((ctx) => ctx.db.get(event._id))).toMatchObject({
+      status: "failed",
+      lastError: "loan or recipient no longer exists",
+    });
+  });
+});
+

@@ -133,7 +133,7 @@ once.
 
 ## Tests
 
-`pnpm test` runs 57 Vitest + convex-test cases against an in-memory Convex. They
+`pnpm test` runs 62 Vitest + convex-test cases against an in-memory Convex. They
 cover:
 
 - **RBAC:** editing or deleting another user's tool, approving a loan on someone

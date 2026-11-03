@@ -228,3 +228,32 @@ Loan parties see short, friendly labels ("Lender notified", "Reminder sent",
 "Notification failed – retrying") derived from `automationEvents` and retrying
 outbox rows. Raw error strings stay out of their view; admins see them on the
 Automation health panel.
+
+## D29. Changes after an independent review
+
+A separate reviewer pass found no authorization or data-exposure issues. It did
+find these correctness gaps, now fixed:
+
+- **Overdue loans block approvals.** An approved loan that's past its end date
+  but not returned still holds the tool, so its effective end for overlap
+  checks is `max(endDate, today)`. Before this, a lender could approve a second
+  loan for today while the tool was still out.
+- **Outbox safety net.** Convex runs scheduled actions at most once. If
+  `deliver` died before recording a result, nothing would ever retry it.
+  `crons.ts` runs `notifications.sweepStuck` every 5 minutes and reschedules
+  pending events that haven't been touched for 5 minutes; n8n's dedup absorbs
+  any overlap. Events whose loan or recipient was deleted are parked as
+  `failed` instead of staying `pending` forever.
+- **Convex waits 30 s for n8n** (was 10 s), longer than the workflow's worst
+  case against a healthy SMTP server, so Convex doesn't retry while n8n is
+  still sending. The remaining duplicate-email race is covered in PRODUCTION.md.
+- **Newest-first lists.** A `by_active` index serves the unfiltered catalog and
+  landing. Ordering on `by_active_category` sorted by category first and cut
+  whole categories off at the limit.
+- **Reminder batches.** The batch limit counts only loans still due today, and
+  a failed write-back no longer stops the loop. A "Check write-backs" node fails
+  the run once the loop ends, so the error workflow still reports it.
+- **No "returned" before a loan starts.** Lenders could use "Mark returned" to
+  undo a future approval, and the borrower got a thank-you email. Cancelling an
+  approved future loan is not in the brief's state machine; PRODUCTION.md lists
+  it.

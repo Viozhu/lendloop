@@ -60,7 +60,7 @@ export const approve = mutation({
     // Checked inside the mutation: Convex serializes conflicting transactions,
     // so two concurrent approvals for overlapping dates can't both commit.
     const approved = await loansWithStatus(ctx, loan.toolId, "approved");
-    if (approved.some((o) => rangesOverlap(o.startDate, o.endDate, loan.startDate, loan.endDate))) {
+    if (approved.some((o) => blocksRange(o, loan.startDate, loan.endDate, todayUtc()))) {
       throw appError("CONFLICT", "Those dates overlap a loan you already approved");
     }
 
@@ -88,6 +88,9 @@ export const markReturned = mutation({
   args: { loanId: v.id("loans") },
   handler: async (ctx, { loanId }) => {
     const { loan } = await requireLoanParty(ctx, loanId, "lender");
+    if (loan.status === "approved" && loan.startDate > todayUtc()) {
+      throw appError("CONFLICT", "This loan hasn't started yet, so it can't be returned");
+    }
     await applyTransition(ctx, loan, "returned");
   },
 });
@@ -139,13 +142,22 @@ export const listIncoming = query({
           conflictsWithApproved:
             loan.status === "pending" &&
             (await loansWithStatus(ctx, loan.toolId, "approved")).some((o) =>
-              rangesOverlap(o.startDate, o.endDate, loan.startDate, loan.endDate),
+              blocksRange(o, loan.startDate, loan.endDate, today),
             ),
         };
       }),
     );
   },
 });
+
+/**
+ * An approved loan blocks a range until it is marked returned: an overdue loan
+ * is still physically out, so its effective end is at least today.
+ */
+function blocksRange(approved: Doc<"loans">, startDate: string, endDate: string, today: string) {
+  const effectiveEnd = approved.endDate < today ? today : approved.endDate;
+  return rangesOverlap(approved.startDate, effectiveEnd, startDate, endDate);
+}
 
 async function loansWithStatus(ctx: QueryCtx, toolId: Id<"tools">, status: LoanStatus) {
   return await ctx.db
