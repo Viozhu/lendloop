@@ -4,6 +4,10 @@ import { AppNav } from "@/components/app-shell/app-nav";
 import { EnsureUser } from "@/components/app-shell/ensure-user";
 import { Skeleton } from "@/components/ui/skeleton";
 
+// Every page in this group sets `export const instant = false`: they redirect
+// signed-out visitors, which Next's instant-navigation validation would report
+// as an error on every page. The opt-out has to be per page, not on the layout.
+
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-1 flex-col">
