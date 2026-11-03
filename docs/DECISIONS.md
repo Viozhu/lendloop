@@ -79,3 +79,20 @@ boundary; Zod adds business limits (trimmed length, description <= 500 chars).
 `EnsureUser` upserts the user row once Convex validates the Clerk token, and
 holds the page until it completes, so queries that call `requireUser` never race
 the first sign-in.
+
+## D13. A request *is* a loan in `pending`
+
+One `loans` table with a status field instead of separate requests and loans
+tables. The state machine (`convex/lib/loanStateMachine.ts`) is the only place
+transitions are defined; every mutation goes through `assertTransition`, and
+each new status maps to exactly one notification type and recipient.
+
+## D14. Loan rules
+
+- Max loan length: 30 days, inclusive of both ends.
+- A lender can't approve a request whose end date has already passed.
+- Approval rejects any overlap with another *approved* loan on the same tool.
+  The check runs inside the mutation, and Convex's serializable transactions
+  make concurrent approvals safe.
+- Date rules live in `convex/lib/loanRules.ts`, shared by the request dialog
+  and the mutation, so the UI and the server always agree.

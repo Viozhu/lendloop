@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CATEGORY_LABELS, CONDITION_LABELS } from "@/lib/labels";
+import { RequestLoanDialog } from "@/components/loans/request-loan-dialog";
 import { AvailabilityBadge } from "./availability-badge";
 import { CategoryFilter } from "./category-filter";
 
@@ -70,11 +71,11 @@ export function ToolCatalog() {
                     <span>{CONDITION_LABELS[tool.condition]} condition</span>
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex flex-col gap-3">
+                <CardContent className="flex flex-1 flex-col gap-3">
                   {tool.description && (
                     <p className="line-clamp-3 text-muted-foreground">{tool.description}</p>
                   )}
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="mt-auto flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     {tool.isMine ? (
                       <span>Your listing</span>
                     ) : (
@@ -85,6 +86,11 @@ export function ToolCatalog() {
                         <BadgeCheckIcon data-icon="inline-start" />
                         Trusted Lender
                       </Badge>
+                    )}
+                    {!tool.isMine && !tool.requestedByMe && (
+                      <span className="ml-auto">
+                        <RequestLoanDialog toolId={tool._id} toolName={tool.name} />
+                      </span>
                     )}
                   </div>
                 </CardContent>

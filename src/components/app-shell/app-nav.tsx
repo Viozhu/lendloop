@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/tools", label: "Tools" },
   { href: "/listings", label: "My listings" },
+  { href: "/requests", label: "My requests" },
+  { href: "/incoming", label: "Incoming" },
 ] as const;
 
 export function AppNav() {
