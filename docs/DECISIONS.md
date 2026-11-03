@@ -257,3 +257,14 @@ find these correctness gaps, now fixed:
   undo a future approval, and the borrower got a thank-you email. Cancelling an
   approved future loan is not in the brief's state machine; PRODUCTION.md lists
   it.
+
+## D30. Clerk's native Convex integration: no JWT template (Deviation)
+
+With Convex 1.49, `ConvexProviderWithClerk` uses the Clerk **session token**
+directly when its `aud` is `convex`, which activating the Convex integration in
+Clerk turns on. It only falls back to a `convex` JWT template otherwise, so no
+template is created. The session token doesn't include profile claims by
+default, so the Clerk setup adds `name` and `email` to it (README). If a user
+still ends up without an email, their notifications are marked `failed` with
+"recipient has no email address on file" instead of retrying against an empty
+address.

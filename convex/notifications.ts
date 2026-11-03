@@ -31,6 +31,10 @@ export const getDelivery = internalQuery({
     if (!loan || !recipient) {
       return { kind: "undeliverable" as const, reason: "loan or recipient no longer exists" };
     }
+    if (!recipient.email) {
+      // The Clerk session token carries no email claim (see README → Clerk setup).
+      return { kind: "undeliverable" as const, reason: "recipient has no email address on file" };
+    }
     const tool = await ctx.db.get(loan.toolId);
 
     // Minimal payload: what the email needs and nothing more. No descriptions,

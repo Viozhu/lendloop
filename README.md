@@ -26,7 +26,13 @@ automation fails, it shows up in an admin panel.
   1. Create an application (email or Google sign-in is fine).
   2. **Configure → Integrations → Convex → Activate.** Copy the **Frontend API
      URL** (`https://<name>.clerk.accounts.dev`); that is `CLERK_JWT_ISSUER_DOMAIN`.
-  3. **API keys:** copy the publishable key and the secret key.
+  3. **Configure → Sessions → Customize session token**, add the claims Convex
+     reads for the user's name and email (without them, users are stored as
+     "Neighbor" with no email and can't receive notifications):
+     ```json
+     { "name": "{{user.full_name}}", "email": "{{user.primary_email_address}}" }
+     ```
+  4. **API keys:** copy the publishable key and the secret key.
 
 ## Quickstart
 
@@ -133,7 +139,7 @@ once.
 
 ## Tests
 
-`pnpm test` runs 62 Vitest + convex-test cases against an in-memory Convex. They
+`pnpm test` runs 63 Vitest + convex-test cases against an in-memory Convex. They
 cover:
 
 - **RBAC:** editing or deleting another user's tool, approving a loan on someone

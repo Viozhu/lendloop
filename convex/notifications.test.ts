@@ -135,5 +135,19 @@ describe("outbox safety net", () => {
       lastError: "loan or recipient no longer exists",
     });
   });
-});
 
+  it("parks an event as failed when the recipient has no email", async () => {
+    const { t, event } = await requestedLoan();
+    await t.run((ctx) => ctx.db.patch(event.recipientUserId, { email: "" }));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await t.action(internal.notifications.deliver, { eventId: event.eventId });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await t.run((ctx) => ctx.db.get(event._id))).toMatchObject({
+      status: "failed",
+      lastError: "recipient has no email address on file",
+    });
+  });
+});
