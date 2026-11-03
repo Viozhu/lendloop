@@ -7,7 +7,7 @@
     "dev:convex": "convex dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p convex",
+    "typecheck": "next typegen && tsc --noEmit && tsc --noEmit -p convex",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -20,7 +20,8 @@
     "check-secrets": "scripts/check-secrets.sh",
     "n8n:smoke": "node scripts/n8n-smoke.mjs",
     "n8n:remind": "docker compose --env-file n8n/.env exec -T -e N8N_RUNNERS_BROKER_PORT=5681 n8n n8n execute --id=LLoverdueRemind1",
-    "seed": "convex run seed:run"
+    "seed": "convex run seed:run",
+    "setup:local": "scripts/setup-local.sh"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

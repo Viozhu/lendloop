@@ -45,7 +45,7 @@ services:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?set in n8n/.env}
       N8N_HOST: localhost
       N8N_PORT: "5678"
-      WEBHOOK_URL: http://localhost:5678/
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
       TZ: ${GENERIC_TIMEZONE:-UTC}
       # Workflows read their shared secrets with {{ $env.X }}; n8n 2.x blocks
