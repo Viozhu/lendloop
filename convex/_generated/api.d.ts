@@ -9,10 +9,13 @@
  */
 
 import type * as admin from "../admin.js";
+import type * as automation from "../automation.js";
+import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_availability from "../lib/availability.js";
 import type * as lib_dates from "../lib/dates.js";
 import type * as lib_errors from "../lib/errors.js";
+import type * as lib_hmac from "../lib/hmac.js";
 import type * as lib_loanRules from "../lib/loanRules.js";
 import type * as lib_loanStateMachine from "../lib/loanStateMachine.js";
 import type * as lib_loanTransitions from "../lib/loanTransitions.js";
@@ -20,6 +23,7 @@ import type * as lib_outbox from "../lib/outbox.js";
 import type * as lib_toolInput from "../lib/toolInput.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as loans from "../loans.js";
+import type * as notifications from "../notifications.js";
 import type * as tools from "../tools.js";
 import type * as users from "../users.js";
 
@@ -31,10 +35,13 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  automation: typeof automation;
+  http: typeof http;
   "lib/auth": typeof lib_auth;
   "lib/availability": typeof lib_availability;
   "lib/dates": typeof lib_dates;
   "lib/errors": typeof lib_errors;
+  "lib/hmac": typeof lib_hmac;
   "lib/loanRules": typeof lib_loanRules;
   "lib/loanStateMachine": typeof lib_loanStateMachine;
   "lib/loanTransitions": typeof lib_loanTransitions;
@@ -42,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   "lib/toolInput": typeof lib_toolInput;
   "lib/validators": typeof lib_validators;
   loans: typeof loans;
+  notifications: typeof notifications;
   tools: typeof tools;
   users: typeof users;
 }>;

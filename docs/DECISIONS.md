@@ -114,3 +114,29 @@ The first admin is created from a trusted shell with the internal
 When an admin removes a listing, pending requests are declined through the
 normal state machine, so borrowers are notified. Approved loans stay open: the
 tool is physically out and still has to be returned.
+
+## D17. Transactional outbox instead of calling n8n from the mutation
+
+Mutations can't do network I/O, and a direct call from an action after the
+mutation could be lost if the action crashes. Each status change inserts a
+`notificationOutbox` row and schedules `notifications.deliver` in the same
+transaction (Convex's scheduler is transactional), so an event exists if and
+only if the status change committed. Delivery is at-least-once: 4 attempts
+(immediately, then +30s, +2m, +10m), after which the row is `failed` and an
+`automationEvents` row makes it visible on the admin health panel. n8n dedupes
+on `eventId`, so retries don't double-send.
+
+## D18. Signed requests in both directions, with separate secrets
+
+`HMAC_SHA256(secret, "${timestamp}.${rawBody}")` in `X-LendLoop-Signature`,
+timestamp in `X-LendLoop-Timestamp`, 300 s replay window, constant-time
+comparison. `CONVEX_TO_N8N_SECRET` and `N8N_TO_CONVEX_SECRET` are separate, so
+leaking one direction doesn't let an attacker forge the other. Convex returns a
+generic 401 and logs the reason; it never echoes why verification failed.
+
+## D19. Reminder write-backs: failed can be upgraded to sent, sent is final
+
+The overdue query skips loans with a `sent` reminder for today's key and
+includes loans whose reminder `failed`, so the next run retries them. The
+write-back inserts when the key is absent, upgrades `failed` to `sent`, and
+answers `{ duplicate: true }` otherwise.

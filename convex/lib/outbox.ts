@@ -1,3 +1,4 @@
+import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { NotificationType } from "./validators";
@@ -5,7 +6,7 @@ import type { NotificationType } from "./validators";
 /**
  * Transactional outbox: the event row is written in the same mutation as the
  * status change, so it commits or rolls back with it. Delivery happens later,
- * outside the transaction.
+ * outside the transaction, in a scheduled action (see notifications.deliver).
  */
 export async function enqueueNotification(
   ctx: MutationCtx,
@@ -18,5 +19,7 @@ export async function enqueueNotification(
     status: "pending",
     attempts: 0,
   });
+  // The scheduler is transactional too: if the mutation rolls back, nothing is sent.
+  await ctx.scheduler.runAfter(0, internal.notifications.deliver, { eventId });
   return eventId;
 }
