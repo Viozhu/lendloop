@@ -22,7 +22,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col bg-background text-foreground">
+      {/* Extensions such as Grammarly add attributes to <body> before React hydrates. */}
+      <body className="flex min-h-full flex-col bg-background text-foreground" suppressHydrationWarning>
         {/* Clerk core 3 + Cache Components: ClerkProvider goes inside <body>. */}
         <ClerkProvider>
           <Providers>{children}</Providers>
