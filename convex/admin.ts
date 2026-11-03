@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query, type QueryCtx } from "./_generated/server";
 import { firstName, requireAdmin } from "./lib/auth";
 import { todayUtc } from "./lib/dates";
@@ -114,6 +114,73 @@ export const setTrustedLender = mutation({
     const user = await ctx.db.get(userId);
     if (!user) throw appError("NOT_FOUND", "User not found");
     await ctx.db.patch(userId, { trustedLender });
+  },
+});
+
+const HEALTH_LIMIT = 20;
+
+/** Everything that went wrong in the automation layer, newest first. Nothing fails silently. */
+export const automationHealth = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const failedOutbox = await ctx.db
+      .query("notificationOutbox")
+      .withIndex("by_status", (q) => q.eq("status", "failed"))
+      .order("desc")
+      .take(HEALTH_LIMIT);
+    const pendingOutbox = await ctx.db
+      .query("notificationOutbox")
+      .withIndex("by_status", (q) => q.eq("status", "pending"))
+      .order("desc")
+      .take(HEALTH_LIMIT * 5);
+    const failedReminders = await ctx.db
+      .query("reminders")
+      .withIndex("by_status", (q) => q.eq("status", "failed"))
+      .order("desc")
+      .take(HEALTH_LIMIT);
+    const workflowErrors = await ctx.db
+      .query("automationEvents")
+      .withIndex("by_kind", (q) => q.eq("kind", "workflow_error"))
+      .order("desc")
+      .take(HEALTH_LIMIT);
+
+    const toolNameForLoan = async (loanId: Id<"loans">) => {
+      const loan = await ctx.db.get(loanId);
+      return loan ? ((await ctx.db.get(loan.toolId))?.name ?? "Removed tool") : "Deleted loan";
+    };
+    const outboxRow = async (event: Doc<"notificationOutbox">) => ({
+      _id: event._id,
+      type: event.type,
+      attempts: event.attempts,
+      lastError: event.lastError ?? null,
+      nextAttemptAt: event.nextAttemptAt ?? null,
+      toolName: await toolNameForLoan(event.loanId),
+      at: event._creationTime,
+    });
+
+    return {
+      failedNotifications: await Promise.all(failedOutbox.map(outboxRow)),
+      retryingNotifications: await Promise.all(
+        pendingOutbox.filter((e) => e.attempts > 0).slice(0, HEALTH_LIMIT).map(outboxRow),
+      ),
+      failedReminders: await Promise.all(
+        failedReminders.map(async (r) => ({
+          _id: r._id,
+          day: r.idempotencyKey.split(":")[1] ?? "",
+          executionId: r.n8nExecutionId ?? null,
+          toolName: await toolNameForLoan(r.loanId),
+          at: r.createdAt,
+        })),
+      ),
+      workflowErrors: workflowErrors.map((e) => ({
+        _id: e._id,
+        message: e.message,
+        executionId: e.externalId?.replace(/^workflow:/, "") ?? null,
+        at: e.createdAt,
+      })),
+    };
   },
 });
 

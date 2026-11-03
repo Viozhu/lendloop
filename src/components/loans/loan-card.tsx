@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
+import type { ActivityItem } from "@convex/lib/activity";
 import type { LoanStatus } from "@convex/lib/validators";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDay } from "@/lib/format";
+import { ActivityFeed } from "./activity-feed";
 import { LoanStatusBadge } from "./loan-status-badge";
 
 export type LoanCardData = {
@@ -10,6 +12,7 @@ export type LoanCardData = {
   startDate: string;
   endDate: string;
   isOverdue: boolean;
+  activity?: ActivityItem[];
 };
 
 /** Shared layout for a loan seen by either party. */
@@ -18,13 +21,11 @@ export function LoanCard({
   title,
   counterpart,
   actions,
-  children,
 }: {
   loan: LoanCardData;
   title: string;
   counterpart: string;
   actions?: ReactNode;
-  children?: ReactNode;
 }) {
   const dates =
     loan.startDate === loan.endDate
@@ -43,7 +44,11 @@ export function LoanCard({
         </CardDescription>
         {actions && <CardAction className="flex flex-wrap justify-end gap-1">{actions}</CardAction>}
       </CardHeader>
-      {children && <CardContent>{children}</CardContent>}
+      {loan.activity && loan.activity.length > 0 && (
+        <CardContent>
+          <ActivityFeed items={loan.activity} />
+        </CardContent>
+      )}
     </Card>
   );
 }

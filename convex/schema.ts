@@ -72,7 +72,8 @@ export default defineSchema({
     deliveredAt: v.optional(v.number()),
   })
     .index("by_eventId", ["eventId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_loan_status", ["loanId", "status"]),
 
   reminders: defineTable({
     idempotencyKey: v.string(), // unique, `${loanId}:${YYYY-MM-DD}`

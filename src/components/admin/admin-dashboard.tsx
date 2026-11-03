@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { ConfirmButton } from "@/components/confirm-button";
+import { AutomationHealth } from "./automation-health";
 import { LoanStatusBadge } from "@/components/loans/loan-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,6 +37,7 @@ export function AdminDashboard() {
           <TabsTrigger value="listings">Listings</TabsTrigger>
           <TabsTrigger value="loans">Loans</TabsTrigger>
           <TabsTrigger value="neighbors">Neighbors</TabsTrigger>
+          <TabsTrigger value="automation">Automation health</TabsTrigger>
         </TabsList>
         <TabsContent value="listings" className="pt-4">
           <ListingsTable />
@@ -45,6 +47,9 @@ export function AdminDashboard() {
         </TabsContent>
         <TabsContent value="neighbors" className="pt-4">
           <NeighborsTable />
+        </TabsContent>
+        <TabsContent value="automation" className="pt-4">
+          <AutomationHealth />
         </TabsContent>
       </Tabs>
     </div>

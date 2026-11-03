@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
+import { loanActivity } from "./lib/activity";
 import { firstName, requireLoanParty, requireUser } from "./lib/auth";
 import { rangesOverlap, todayUtc } from "./lib/dates";
 import { appError } from "./lib/errors";
@@ -108,6 +109,7 @@ export const listMyRequests = query({
         ...loanSummary(loan, today),
         tool: { name: (await ctx.db.get(loan.toolId))?.name ?? "Removed tool" },
         lender: { firstName: await firstNameOf(ctx, loan.lenderId) },
+        activity: await loanActivity(ctx, loan._id),
       })),
     );
   },
@@ -132,6 +134,7 @@ export const listIncoming = query({
           ...loanSummary(loan, today),
           tool: { name: (await ctx.db.get(loan.toolId))?.name ?? "Removed tool" },
           borrower: { firstName: firstName(borrower?.name ?? "") },
+          activity: await loanActivity(ctx, loan._id),
           // Lets the UI explain why approving would fail before the lender tries.
           conflictsWithApproved:
             loan.status === "pending" &&

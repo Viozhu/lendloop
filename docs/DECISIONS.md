@@ -210,3 +210,21 @@ set, so a future channel built in Convex could use it.
 imports it with a fixed id, and deletes the file. Mailpit needs no
 authentication, so the credential contains no secret, but credential files
 never go into the repo anyway. The README also documents the manual UI steps.
+
+## D27. Seed runs inside Convex (Deviation)
+
+The brief lists `scripts/seed.ts`. The seed is `convex/seed.ts`, an
+`internalMutation` run with `pnpm seed` (`convex run seed:run`). It executes
+inside one transaction, reuses the real outbox helper (the seeded pending
+request is delivered to n8n like any other), and can't be called from a
+browser. A Node script would need an admin key or a public mutation to do the
+same. Demo neighbors get synthetic token identifiers, so nobody can sign in as
+them. `{"forEmail": "..."}` adds an incoming request and an overdue loan for a
+real account that has signed in once.
+
+## D28. Activity feed wording
+
+Loan parties see short, friendly labels ("Lender notified", "Reminder sent",
+"Notification failed – retrying") derived from `automationEvents` and retrying
+outbox rows. Raw error strings stay out of their view; admins see them on the
+Automation health panel.
