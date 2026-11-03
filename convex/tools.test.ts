@@ -10,11 +10,22 @@ describe("tools.listPublic", () => {
     const removed = await createTool(t, userId, "Removed rake");
     await t.run((ctx) => ctx.db.patch(removed, { isActive: false }));
 
-    const tools = await t.query(api.tools.listPublic, {});
+    const { tools, hasMore } = await t.query(api.tools.listPublic, {});
 
     expect(tools).toHaveLength(1);
     expect(Object.keys(tools[0]).sort()).toEqual(["_id", "category", "name"]);
     expect(tools[0].name).toBe("Hedge trimmer");
+    expect(hasMore).toBe(false);
+  });
+
+  it("caps the board at 60 and reports that more exist", async () => {
+    const t = setup();
+    const { userId } = await createUser(t, { name: "Olivia Owner" });
+    for (let i = 0; i < 61; i++) await createTool(t, userId, `Tool ${i}`);
+
+    const { tools, hasMore } = await t.query(api.tools.listPublic, {});
+    expect(tools).toHaveLength(60);
+    expect(hasMore).toBe(true);
   });
 });
 
@@ -25,7 +36,7 @@ describe("tools ordering", () => {
     await as.mutation(api.tools.create, { ...validTool, name: "Old other", category: "other" });
     await as.mutation(api.tools.create, { ...validTool, name: "New camping", category: "camping" });
 
-    expect((await t.query(api.tools.listPublic, {})).map((x) => x.name)).toEqual(["New camping", "Old other"]);
+    expect((await t.query(api.tools.listPublic, {})).tools.map((x) => x.name)).toEqual(["New camping", "Old other"]);
     expect((await as.query(api.tools.list, {})).map((x) => x.name)).toEqual(["New camping", "Old other"]);
     void userId;
   });

@@ -25,12 +25,16 @@ const toolFields = {
 export const listPublic = query({
   args: {},
   handler: async (ctx) => {
+    // One extra row tells the landing page whether the board was cut off.
     const tools = await ctx.db
       .query("tools")
       .withIndex("by_active", (q) => q.eq("isActive", true))
       .order("desc")
-      .take(PUBLIC_LIST_LIMIT);
-    return tools.map(({ _id, name, category }) => ({ _id, name, category }));
+      .take(PUBLIC_LIST_LIMIT + 1);
+    return {
+      tools: tools.slice(0, PUBLIC_LIST_LIMIT).map(({ _id, name, category }) => ({ _id, name, category })),
+      hasMore: tools.length > PUBLIC_LIST_LIMIT,
+    };
   },
 });
 

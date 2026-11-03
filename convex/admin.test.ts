@@ -46,7 +46,7 @@ describe("admin RBAC", () => {
     const tool = await t.run((ctx) => ctx.db.get(toolId));
     expect(tool).toMatchObject({ isActive: false, removedBy: admin.userId });
     expect((await t.run((ctx) => ctx.db.get(loanId)))?.status).toBe("declined");
-    expect(await t.query(api.tools.listPublic, {})).toEqual([]);
+    expect((await t.query(api.tools.listPublic, {})).tools).toEqual([]);
 
     const [listing] = await admin.as.query(api.admin.listListings, {});
     expect(listing.removedByAdmin).toBe(true);
